@@ -4,18 +4,18 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-env_logger = "0.8"
+env_logger = "0.9.0"
 structopt = "0.3"
 rand = "0.8.3"
 hex = "0.4.3"
-actix-web = "4.0.0-beta.15"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
+serde = { version = "1.0", features = ["rc","derive"] }
+serde_json = "1.0.78"
 jsonrpsee-types = "0.5.1"
 url = { version = "2", features = ["serde"] }
 scale-info = { version = "1.0.0", default-features = false, features = [] }
 codec = { package = "parity-scale-codec", version = "2", default-features = false, features = ["derive", "full"] }
 derive_more = { version = "0.99.0", default-features = false }
+actix-web ="4.0.0-beta.21"
 
 [dependencies.subxt]
 # path = "../subxt"
@@ -32,6 +32,11 @@ git = "https://github.com/paritytech/substrate.git"
 branch = "polkadot-v0.9.15"
 package = "sp-core"
 features = ["full_crypto"]
+
+[dependencies.actix-web-middleware-keycloak-auth]
+git = "https://github.com/JonathanJFlores/actix-web-middleware-keycloak-auth.git"
+branch = "master"
+package = "actix-web-middleware-keycloak-auth"
 
 [features]
 default = ["std"]

@@ -1,14 +1,16 @@
 use actix_web::{
     middleware,
     web::{self, Data},
-    App, HttpServer,
+    App, HttpServer
 };
 use command::*;
 use state::*;
 use std::sync::{Arc, Mutex};
 use structopt::StructOpt;
 use subxt::ClientBuilder;
-
+use actix_web_middleware_keycloak_auth::{
+    AlwaysReturnPolicy, DecodingKey, KeycloakAuth, Role,
+};
 #[subxt::subxt(runtime_metadata_path = "sugarfunge_metadata.scale")]
 pub mod sugarfunge {}
 mod account;
@@ -19,6 +21,10 @@ mod dex;
 mod escrow;
 mod state;
 mod util;
+
+const KEYCLOAK_PK: &str = "-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAgjxDaoGghFwAkdoo8YqoF4rVhZVmbkNTXrqDba47muKCnaULzlzOK2n//bB9Twaa/yxZ0cwli2vqsci1cNKQNh3zZjlLjeK6lEc/iDQvPLXad8/rRqj3ZgH+01YscOZBGdVq2GAOL+WYr3bhLD6yNiUOHXJQYrRoekfMYiQRmvV+c1/eXjFEbcqwOxKGxZ6CPIwWCEjPjwW2Hp8E4Ap518bzlKie491OJ9bkjAGf/6qhM/faf7Sx99Bhq8tk/d1fVZSCkW+MP+by/EyAruOS/0KEzHU6ERSp6gtoQ9AFYdYSv/J5/fYzWnuDemTWOy7GmUrdJI8D1CDmNKVgdYPDFwIDAQAB
+-----END PUBLIC KEY-----";
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -38,11 +44,20 @@ async fn main() -> std::io::Result<()> {
     };
 
     HttpServer::new(move || {
+        let keycloak_auth = KeycloakAuth {
+            detailed_responses: true,
+            passthrough_policy: AlwaysReturnPolicy,
+            keycloak_oid_public_key: DecodingKey::from_rsa_pem(KEYCLOAK_PK.as_bytes()).unwrap(),
+            required_roles: vec![],
+        };
+
+
         App::new()
             .wrap(middleware::DefaultHeaders::new().add(("X-Version", "0.2")))
             .wrap(middleware::Compress::default())
             .wrap(middleware::Logger::default())
             .app_data(Data::new(state.clone()))
+            .wrap(keycloak_auth)
             .route("account/create", web::post().to(account::create))
             .route("account/fund", web::post().to(account::fund))
             .route("account/balance", web::get().to(account::balance))
@@ -71,6 +86,7 @@ async fn main() -> std::io::Result<()> {
             .route("escrow/deposit", web::post().to(escrow::deposit_assets))
     })
     .bind((opt.listen.host_str().unwrap(), opt.listen.port().unwrap()))?
+    .workers(1)
     .run()
     .await
 }
