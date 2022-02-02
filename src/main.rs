@@ -9,7 +9,7 @@ use std::sync::{Arc, Mutex};
 use structopt::StructOpt;
 use subxt::ClientBuilder;
 use actix_web_middleware_keycloak_auth::{
-    AlwaysReturnPolicy, DecodingKey, KeycloakAuth, Role,
+    AlwaysReturnPolicy, DecodingKey, KeycloakAuth,
 };
 #[subxt::subxt(runtime_metadata_path = "sugarfunge_metadata.scale")]
 pub mod sugarfunge {}
@@ -21,6 +21,7 @@ mod dex;
 mod escrow;
 mod state;
 mod util;
+mod user;
 
 const KEYCLOAK_PK: &str = "-----BEGIN PUBLIC KEY-----
 MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAgjxDaoGghFwAkdoo8YqoF4rVhZVmbkNTXrqDba47muKCnaULzlzOK2n//bB9Twaa/yxZ0cwli2vqsci1cNKQNh3zZjlLjeK6lEc/iDQvPLXad8/rRqj3ZgH+01YscOZBGdVq2GAOL+WYr3bhLD6yNiUOHXJQYrRoekfMYiQRmvV+c1/eXjFEbcqwOxKGxZ6CPIwWCEjPjwW2Hp8E4Ap518bzlKie491OJ9bkjAGf/6qhM/faf7Sx99Bhq8tk/d1fVZSCkW+MP+by/EyAruOS/0KEzHU6ERSp6gtoQ9AFYdYSv/J5/fYzWnuDemTWOy7GmUrdJI8D1CDmNKVgdYPDFwIDAQAB
@@ -58,6 +59,7 @@ async fn main() -> std::io::Result<()> {
             .wrap(middleware::Logger::default())
             .app_data(Data::new(state.clone()))
             .wrap(keycloak_auth)
+            .route("user/verify_seed", web::get().to(user::get_seed))
             .route("account/create", web::post().to(account::create))
             .route("account/fund", web::post().to(account::fund))
             .route("account/balance", web::get().to(account::balance))
