@@ -59,7 +59,7 @@ async fn main() -> std::io::Result<()> {
             .wrap(middleware::Logger::default())
             .app_data(Data::new(state.clone()))
             .wrap(keycloak_auth)
-            .route("user/verify_seed", web::get().to(user::get_seed))
+            .route("user/verify_seed", web::get().to(user::verify_seed))
             .route("account/create", web::post().to(account::create))
             .route("account/fund", web::post().to(account::fund))
             .route("account/balance", web::get().to(account::balance))
