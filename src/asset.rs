@@ -1,6 +1,8 @@
 use crate::state::*;
 use crate::sugarfunge;
 use crate::util::*;
+use crate::user;
+use actix_web_middleware_keycloak_auth::KeycloakClaims;
 use actix_web::{error, web, HttpResponse};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -9,7 +11,6 @@ use subxt::PairSigner;
 
 #[derive(Serialize, Deserialize)]
 pub struct CreateClassInput {
-    seed: String,
     class_id: u64,
     metadata: serde_json::Value,
     owner: String,
@@ -25,36 +26,52 @@ pub struct CreateClassOutput {
 pub async fn create_class(
     data: web::Data<AppState>,
     req: web::Json<CreateClassInput>,
+    claims: KeycloakClaims<user::ClaimsWithEmail>,
 ) -> error::Result<HttpResponse> {
-    let pair = get_pair_from_seed(&req.seed)?;
-    let signer = PairSigner::new(pair);
-    let to = sp_core::sr25519::Public::from_str(&req.owner).map_err(map_account_err)?;
-    let to = sp_core::crypto::AccountId32::from(to);
-    let metadata: Vec<u8> = serde_json::to_vec(&req.metadata).unwrap_or_default();
-    let api = data.api.lock().unwrap();
-    let result = api
-        .tx()
-        .asset()
-        .create_class(to, req.class_id, metadata)
-        .sign_and_submit_then_watch(&signer)
-        .await
-        .map_err(map_subxt_err)?
-        .wait_for_finalized_success()
-        .await
-        .map_err(map_subxt_err)?;
+    match user::get_seed(&claims.sub).await {
+        Ok(response) => {
+            if !response.seed.clone().unwrap_or_default().is_empty() {
+                let user_seed = response.seed.clone().unwrap();
 
-    let result = result
-        .find_first_event::<sugarfunge::asset::events::ClassCreated>()
-        .map_err(map_subxt_err)?;
-
-    match result {
-        Some(event) => Ok(HttpResponse::Ok().json(CreateClassOutput {
-            class_id: event.class_id,
-            who: event.who.to_string(),
-        })),
-        None => Ok(HttpResponse::BadRequest().json(RequestError {
-            message: json!("Failed to find sugarfunge::asset::events::ClassCreated"),
-        })),
+                let pair = get_pair_from_seed(&user_seed)?;
+                let signer = PairSigner::new(pair);
+                let to = sp_core::sr25519::Public::from_str(&req.owner).map_err(map_account_err)?;
+                let to = sp_core::crypto::AccountId32::from(to);
+                let metadata: Vec<u8> = serde_json::to_vec(&req.metadata).unwrap_or_default();
+                let api = data.api.lock().unwrap();
+                let result = api
+                    .tx()
+                    .asset()
+                    .create_class(to, req.class_id, metadata)
+                    .sign_and_submit_then_watch(&signer)
+                    .await
+                    .map_err(map_subxt_err)?
+                    .wait_for_finalized_success()
+                    .await
+                    .map_err(map_subxt_err)?;
+            
+                let result = result
+                    .find_first_event::<sugarfunge::asset::events::ClassCreated>()
+                    .map_err(map_subxt_err)?;
+            
+                match result {
+                    Some(event) => Ok(HttpResponse::Ok().json(CreateClassOutput {
+                        class_id: event.class_id,
+                        who: event.who.to_string(),
+                    })),
+                    None => Ok(HttpResponse::BadRequest().json(RequestError {
+                        message: json!("Failed to find sugarfunge::asset::events::ClassCreated"),
+                    })),
+                }
+            } else {
+                Ok(HttpResponse::BadRequest().json(RequestError {
+                    message: json!("Not found user Attributes"),
+                }))
+            }
+        },
+        Err(_) => Ok(HttpResponse::BadRequest().json(RequestError {
+            message: json!("Failed to find user::getAttributes"),
+        }))
     }
 }
 

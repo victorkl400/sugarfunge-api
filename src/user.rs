@@ -101,7 +101,7 @@ pub struct UserAtributes {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct UserSeedOutput {
-    seed: Option<String>,
+    pub seed: Option<String>
 }
 
 
@@ -216,8 +216,6 @@ pub async fn insert_seed_user(
                         .send_json(&attributes)
                         .await;
         
-                    // println!("{:?}", response);
-        
                     match response {
                         Ok(response) => {
                             match response.status() { 
@@ -274,7 +272,7 @@ pub async fn insert_seed_user(
 #[derive(Debug, Deserialize)]
 #[allow(dead_code)]
 pub struct ClaimsWithEmail {
-    sub: String,
+    pub sub: String,
     name: String,
     preferred_username: String,
     given_name: String,
