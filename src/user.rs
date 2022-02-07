@@ -1,8 +1,10 @@
+use crate::account;
 use serde::{Deserialize, Serialize};
-// use serde_json::Value;
 use actix_web::{
     web,
     Responder,
+    HttpRequest,
+    body,
     http::{header, StatusCode}
 };
 use serde_json::json;
@@ -175,62 +177,88 @@ pub struct InsertUserSeedOutput {
     message: String
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+pub struct CreateAccountOutput {
+    seed: String,
+    account: String,
+}
+
 pub async fn insert_seed_user(
-    user_id: &String
+    user_id: &String,
+    req: HttpRequest
 ) -> Result<web::Json<InsertUserSeedOutput>, web::Json<InsertUserSeedOutput>> { 
 
     match get_sugarfunge_token().await {
         Ok(response) => {
-            let awc_client = awc::Client::new();
-            let endpoint = format!("http://0.0.0.0:8080/auth/admin/realms/Sugarfunge/users/{}", user_id); 
+            match account::create(req).await {
+                Ok(response_account) => {                    
+                    
+                    let bytes = body::to_bytes(response_account.into_body()).await.unwrap();
+                    let str_bytes = std::str::from_utf8(&bytes).unwrap().to_string();
+                    let body: CreateAccountOutput = serde_json::from_str(&str_bytes).unwrap();
+                    // println!("CreateAccountOutput {:?}", body);
+                    
+                    let awc_client = awc::Client::new();
+                    let endpoint = format!("http://0.0.0.0:8080/auth/admin/realms/Sugarfunge/users/{}", user_id); 
 
-            let attributes = json!({
-                "attributes": {
-                    "user-seed": [
-                        "//cejciecioecieiceihihceoi"
-                    ]
-                }
-            });
-
-            let response = awc_client.put(endpoint)
-                .append_header((header::ACCEPT, "application/json"), )
-                .append_header((header::CONTENT_TYPE, "application/json"))
-                .append_header((header::AUTHORIZATION, "Bearer ".to_string() + &response.access_token))
-                .send_json(&attributes)
-                .await;
-
-            // println!("{:?}", response);
-
-            match response {
-                Ok(response) => {
-                    match response.status() { 
-                        StatusCode::NO_CONTENT => {
-                            Ok(web::Json(
-                                InsertUserSeedOutput {
-                                    error: None,
-                                    message: "Attribute insert to user attributes".to_string()
-                                }
-                            ))
+                    let attributes = json!({
+                        "attributes": {
+                            "user-seed": [
+                                body.seed
+                            ]
                         }
-                        _ => {
+                    });
+        
+                    let response = awc_client.put(endpoint)
+                        .append_header((header::ACCEPT, "application/json"), )
+                        .append_header((header::CONTENT_TYPE, "application/json"))
+                        .append_header((header::AUTHORIZATION, "Bearer ".to_string() + &response.access_token))
+                        .send_json(&attributes)
+                        .await;
+        
+                    // println!("{:?}", response);
+        
+                    match response {
+                        Ok(response) => {
+                            match response.status() { 
+                                StatusCode::NO_CONTENT => {
+                                    Ok(web::Json(
+                                        InsertUserSeedOutput {
+                                            error: None,
+                                            message: "Attribute insert to user attributes".to_string()
+                                        }
+                                    ))
+                                }
+                                _ => {
+                                    Err(web::Json(
+                                        InsertUserSeedOutput {
+                                        error: Some("Error Insert Attribute".to_string()),
+                                        message: "Error when insert attribute to user".to_string()
+                                    }
+                                  ))
+                                }
+                            }
+                        }
+                        Err(_e) => {
                             Err(web::Json(
                                 InsertUserSeedOutput {
-                                error: Some("Error Insert Attribute".to_string()),
-                                message: "Error when insert attribute to user".to_string()
-                            }
+                                    error: Some("Error Insert Attribute".to_string()),
+                                    message: "Unknown Error".to_string()
+                                }
                           ))
                         }
                     }
                 }
-                Err(_e) => {
+                Err(_) => {
                     Err(web::Json(
                         InsertUserSeedOutput {
                             error: Some("Error Insert Attribute".to_string()),
                             message: "Unknown Error".to_string()
                         }
-                  ))
+                    ))
                 }
-            }
+            }            
+
         }
         Err(_error) => {
             Err(web::Json(
@@ -255,7 +283,8 @@ pub struct ClaimsWithEmail {
 }
 
 pub async fn verify_seed(
-    claims: KeycloakClaims<ClaimsWithEmail>
+    claims: KeycloakClaims<ClaimsWithEmail>,
+    req: HttpRequest
 ) ->  impl Responder { 
 
     match get_seed(&claims.sub).await {
@@ -268,7 +297,7 @@ pub async fn verify_seed(
                     }
                 )
             } else {
-                match insert_seed_user(&claims.sub).await {
+                match insert_seed_user(&claims.sub, req).await {
                     Ok(response) => { response }
                     Err(error) => {error}
                 }

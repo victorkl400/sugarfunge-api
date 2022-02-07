@@ -1,7 +1,7 @@
 use crate::state::*;
 use crate::sugarfunge;
 use crate::util::*;
-use actix_web::{error, web, HttpRequest, HttpResponse};
+use actix_web::{error, web, HttpRequest, http::StatusCode, HttpResponse};
 use rand::prelude::*;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -10,7 +10,7 @@ use std::str::FromStr;
 use subxt::sp_runtime::traits::IdentifyAccount;
 use subxt::PairSigner;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct CreateAccountOutput {
     seed: String,
     account: String,
@@ -23,7 +23,7 @@ pub async fn create(_req: HttpRequest) -> error::Result<HttpResponse> {
     let seed = format!("//{}", seed);
     let pair = get_pair_from_seed(&seed)?;
     let account = pair.public().into_account();
-    Ok(HttpResponse::Ok().json(CreateAccountOutput {
+    Ok(HttpResponse::build(StatusCode::OK).json(CreateAccountOutput {
         seed,
         account: format!("{}", account),
     }))
