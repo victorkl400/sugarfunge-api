@@ -1,6 +1,7 @@
 use crate::state::*;
 use crate::sugarfunge;
 use crate::util::*;
+use crate::user;
 use actix_web::{error, web, HttpResponse};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -8,6 +9,7 @@ use sp_core::Pair;
 use subxt::sp_runtime::traits::IdentifyAccount;
 use subxt::PairSigner;
 use sugarfunge::runtime_types::sugarfunge_primitives::CurrencyId;
+use actix_web_middleware_keycloak_auth::KeycloakClaims;
 
 #[derive(Serialize, Deserialize)]
 pub struct Currency {
@@ -17,7 +19,6 @@ pub struct Currency {
 
 #[derive(Deserialize)]
 pub struct IssueCurrencyInput {
-    seed: String,
     currency: Currency,
     amount: i128,
 }
@@ -33,53 +34,70 @@ pub struct IssueCurrencyOutput {
 pub async fn issue(
     data: web::Data<AppState>,
     req: web::Json<IssueCurrencyInput>,
+    claims: KeycloakClaims<user::ClaimsWithEmail>
 ) -> error::Result<HttpResponse> {
-    let pair = get_pair_from_seed(&req.seed)?;
-    let who = pair.public().into_account();
-    let who = sp_core::crypto::AccountId32::from(who);
-    let who = subxt::sp_runtime::MultiAddress::Id(who);
-    let currency_id = CurrencyId(req.currency.class_id, req.currency.asset_id);
-    let signer = PairSigner::new(pair);
-    let api = data.api.lock().unwrap();
-    let result = api
-        .storage()
-        .orml_tokens()
-        .total_issuance(currency_id, None)
-        .await;
-    let total_issuance = result.map_err(map_subxt_err)?;
-    let currency_id = CurrencyId(req.currency.class_id, req.currency.asset_id);
-    let call = sugarfunge::runtime_types::sugarfunge_runtime::Call::OrmlCurrencies(
-        sugarfunge::runtime_types::orml_currencies::module::Call::update_balance {
-            who,
-            currency_id,
-            amount: req.amount.saturating_add(total_issuance as i128),
+    match user::get_seed(&claims.sub).await {
+        Ok(response) => {
+            if !response.seed.clone().unwrap_or_default().is_empty() {
+                let user_seed = response.seed.clone().unwrap();
+
+                let pair = get_pair_from_seed(&user_seed)?;
+                let who = pair.public().into_account();
+                let who = sp_core::crypto::AccountId32::from(who);
+                let who = subxt::sp_runtime::MultiAddress::Id(who);
+                let currency_id = CurrencyId(req.currency.class_id, req.currency.asset_id);
+                let signer = PairSigner::new(pair);
+                let api = data.api.lock().unwrap();
+                let result = api
+                    .storage()
+                    .orml_tokens()
+                    .total_issuance(currency_id, None)
+                    .await;
+                let total_issuance = result.map_err(map_subxt_err)?;
+                let currency_id = CurrencyId(req.currency.class_id, req.currency.asset_id);
+                let call = sugarfunge::runtime_types::sugarfunge_runtime::Call::OrmlCurrencies(
+                    sugarfunge::runtime_types::orml_currencies::module::Call::update_balance {
+                        who,
+                        currency_id,
+                        amount: req.amount.saturating_add(total_issuance as i128),
+                    },
+                );
+                let result = api
+                    .tx()
+                    .sudo()
+                    .sudo(call)
+                    .sign_and_submit_then_watch(&signer)
+                    .await
+                    .map_err(map_subxt_err)?
+                    .wait_for_finalized_success()
+                    .await
+                    .map_err(map_subxt_err)?;
+                let result = result
+                    .find_first_event::<sugarfunge::orml_currencies::events::BalanceUpdated>()
+                    .map_err(map_subxt_err)?;
+                match result {
+                    Some(event) => Ok(HttpResponse::Ok().json(IssueCurrencyOutput {
+                        currency: Currency {
+                            class_id: event.currency_id.0,
+                            asset_id: event.currency_id.1,
+                        },
+                        who: event.who.to_string(),
+                        amount: event.amount,
+                    })),
+                    None => Ok(HttpResponse::BadRequest().json(RequestError {
+                        message: json!("Failed to find sugarfunge::orml_currencies::events::BalanceUpdated"),
+                    })),
+                }
+
+            } else {
+                Ok(HttpResponse::BadRequest().json(RequestError {
+                    message: json!("Not found user Attributes"),
+                }))
+            }
         },
-    );
-    let result = api
-        .tx()
-        .sudo()
-        .sudo(call)
-        .sign_and_submit_then_watch(&signer)
-        .await
-        .map_err(map_subxt_err)?
-        .wait_for_finalized_success()
-        .await
-        .map_err(map_subxt_err)?;
-    let result = result
-        .find_first_event::<sugarfunge::orml_currencies::events::BalanceUpdated>()
-        .map_err(map_subxt_err)?;
-    match result {
-        Some(event) => Ok(HttpResponse::Ok().json(IssueCurrencyOutput {
-            currency: Currency {
-                class_id: event.currency_id.0,
-                asset_id: event.currency_id.1,
-            },
-            who: event.who.to_string(),
-            amount: event.amount,
-        })),
-        None => Ok(HttpResponse::BadRequest().json(RequestError {
-            message: json!("Failed to find sugarfunge::orml_currencies::events::BalanceUpdated"),
-        })),
+        Err(_) => Ok(HttpResponse::BadRequest().json(RequestError {
+            message: json!("Failed to find user::getAttributes"),
+        }))
     }
 }
 
@@ -142,7 +160,6 @@ pub async fn supply(
 
 #[derive(Serialize, Deserialize)]
 pub struct MintCurrencyInput {
-    seed: String,
     currency: Currency,
     amount: u128,
 }
@@ -158,42 +175,58 @@ pub struct MintCurrencyOutput {
 pub async fn mint(
     data: web::Data<AppState>,
     req: web::Json<MintCurrencyInput>,
+    claims: KeycloakClaims<user::ClaimsWithEmail>
 ) -> error::Result<HttpResponse> {
-    let pair = get_pair_from_seed(&req.seed)?;
-    let signer = PairSigner::new(pair);
-    let currency_id = CurrencyId(req.currency.class_id, req.currency.asset_id);
-    let api = data.api.lock().unwrap();
-    let result = api
-        .tx()
-        .currency()
-        .mint(currency_id, req.amount)
-        .sign_and_submit_then_watch(&signer)
-        .await
-        .map_err(map_subxt_err)?
-        .wait_for_finalized_success()
-        .await
-        .map_err(map_subxt_err)?;
-    let result = result
-        .find_first_event::<sugarfunge::currency::events::Mint>()
-        .map_err(map_subxt_err)?;
-    match result {
-        Some(event) => Ok(HttpResponse::Ok().json(MintCurrencyOutput {
-            currency: Currency {
-                class_id: event.currency_id.0,
-                asset_id: event.currency_id.1,
-            },
-            amount: event.amount,
-            who: event.who.to_string(),
-        })),
-        None => Ok(HttpResponse::BadRequest().json(RequestError {
-            message: json!("Failed to find sugarfunge::currency::events::Mint"),
-        })),
+    match user::get_seed(&claims.sub).await {
+        Ok(response) => {
+            if !response.seed.clone().unwrap_or_default().is_empty() {
+                let user_seed = response.seed.clone().unwrap();
+
+                let pair = get_pair_from_seed(&user_seed)?;
+                let signer = PairSigner::new(pair);
+                let currency_id = CurrencyId(req.currency.class_id, req.currency.asset_id);
+                let api = data.api.lock().unwrap();
+                let result = api
+                    .tx()
+                    .currency()
+                    .mint(currency_id, req.amount)
+                    .sign_and_submit_then_watch(&signer)
+                    .await
+                    .map_err(map_subxt_err)?
+                    .wait_for_finalized_success()
+                    .await
+                    .map_err(map_subxt_err)?;
+                let result = result
+                    .find_first_event::<sugarfunge::currency::events::Mint>()
+                    .map_err(map_subxt_err)?;
+                match result {
+                    Some(event) => Ok(HttpResponse::Ok().json(MintCurrencyOutput {
+                        currency: Currency {
+                            class_id: event.currency_id.0,
+                            asset_id: event.currency_id.1,
+                        },
+                        amount: event.amount,
+                        who: event.who.to_string(),
+                    })),
+                    None => Ok(HttpResponse::BadRequest().json(RequestError {
+                        message: json!("Failed to find sugarfunge::currency::events::Mint"),
+                    })),
+                }
+
+            } else {
+                Ok(HttpResponse::BadRequest().json(RequestError {
+                    message: json!("Not found user Attributes"),
+                }))
+            }
+        },
+        Err(_) => Ok(HttpResponse::BadRequest().json(RequestError {
+            message: json!("Failed to find user::getAttributes"),
+        }))
     }
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct BurnCurrencyInput {
-    seed: String,
     currency: Currency,
     amount: u128,
 }
@@ -209,36 +242,53 @@ pub struct BurnCurrencyOutput {
 pub async fn burn(
     data: web::Data<AppState>,
     req: web::Json<BurnCurrencyInput>,
+    claims: KeycloakClaims<user::ClaimsWithEmail>
 ) -> error::Result<HttpResponse> {
-    let pair = get_pair_from_seed(&req.seed)?;
-    let signer = PairSigner::new(pair);
-    let currency_id = CurrencyId(req.currency.class_id, req.currency.asset_id);
-    let api = data.api.lock().unwrap();
-    let result = api
-        .tx()
-        .currency()
-        .burn(currency_id, req.amount)
-        .sign_and_submit_then_watch(&signer)
-        .await
-        .map_err(map_subxt_err)?
-        .wait_for_finalized_success()
-        .await
-        .map_err(map_subxt_err)?;
-    let result = result
-        .find_first_event::<sugarfunge::currency::events::Burn>()
-        .map_err(map_subxt_err)?;
-    match result {
-        Some(event) => Ok(HttpResponse::Ok().json(BurnCurrencyOutput {
-            currency: Currency {
-                class_id: event.currency_id.0,
-                asset_id: event.currency_id.1,
-            },
-            amount: event.amount,
-            who: event.who.to_string(),
-        })),
-        None => Ok(HttpResponse::BadRequest().json(RequestError {
-            message: json!("Failed to find sugarfunge::currency::events::Burn"),
-        })),
+    match user::get_seed(&claims.sub).await {
+        Ok(response) => {
+            if !response.seed.clone().unwrap_or_default().is_empty() {
+                let user_seed = response.seed.clone().unwrap();
+
+                let pair = get_pair_from_seed(&user_seed)?;
+                let signer = PairSigner::new(pair);
+                let currency_id = CurrencyId(req.currency.class_id, req.currency.asset_id);
+                let api = data.api.lock().unwrap();
+                let result = api
+                    .tx()
+                    .currency()
+                    .burn(currency_id, req.amount)
+                    .sign_and_submit_then_watch(&signer)
+                    .await
+                    .map_err(map_subxt_err)?
+                    .wait_for_finalized_success()
+                    .await
+                    .map_err(map_subxt_err)?;
+                let result = result
+                    .find_first_event::<sugarfunge::currency::events::Burn>()
+                    .map_err(map_subxt_err)?;
+                match result {
+                    Some(event) => Ok(HttpResponse::Ok().json(BurnCurrencyOutput {
+                        currency: Currency {
+                            class_id: event.currency_id.0,
+                            asset_id: event.currency_id.1,
+                        },
+                        amount: event.amount,
+                        who: event.who.to_string(),
+                    })),
+                    None => Ok(HttpResponse::BadRequest().json(RequestError {
+                        message: json!("Failed to find sugarfunge::currency::events::Burn"),
+                    })),
+                }
+
+            } else {
+                Ok(HttpResponse::BadRequest().json(RequestError {
+                    message: json!("Not found user Attributes"),
+                }))
+            }
+        },
+        Err(_) => Ok(HttpResponse::BadRequest().json(RequestError {
+            message: json!("Failed to find user::getAttributes"),
+        }))
     }
 }
 
