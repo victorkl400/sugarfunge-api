@@ -2,6 +2,7 @@ use crate::state::*;
 use crate::sugarfunge;
 use crate::util::*;
 use crate::user;
+use crate::config::Config;
 use actix_web_middleware_keycloak_auth::KeycloakClaims;
 use actix_web::{error, web, HttpResponse};
 use serde::{Deserialize, Serialize};
@@ -26,9 +27,10 @@ pub struct CreateClassOutput {
 pub async fn create_class(
     data: web::Data<AppState>,
     req: web::Json<CreateClassInput>,
-    claims: KeycloakClaims<user::ClaimsWithEmail>
+    claims: KeycloakClaims<user::ClaimsWithEmail>,
+    env: web::Data<Config>
 ) -> error::Result<HttpResponse> {
-    match user::get_seed(&claims.sub).await {
+    match user::get_seed(&claims.sub, env).await {
         Ok(response) => {
             if !response.seed.clone().unwrap_or_default().is_empty() {
                 let user_seed = response.seed.clone().unwrap();
@@ -93,10 +95,11 @@ pub struct CreateOutput {
 pub async fn create(
     data: web::Data<AppState>,
     req: web::Json<CreateInput>,
-    claims: KeycloakClaims<user::ClaimsWithEmail>
+    claims: KeycloakClaims<user::ClaimsWithEmail>,
+    env: web::Data<Config>
 ) -> error::Result<HttpResponse> {
 
-    match user::get_seed(&claims.sub).await {
+    match user::get_seed(&claims.sub, env).await {
         Ok(response) => {
             if !response.seed.clone().unwrap_or_default().is_empty() {
                 let user_seed = response.seed.clone().unwrap();
@@ -164,10 +167,11 @@ pub struct MintOutput {
 pub async fn mint(
     data: web::Data<AppState>,
     req: web::Json<MintInput>,
-    claims: KeycloakClaims<user::ClaimsWithEmail>
+    claims: KeycloakClaims<user::ClaimsWithEmail>,
+    env: web::Data<Config>
 ) -> error::Result<HttpResponse> {
 
-    match user::get_seed(&claims.sub).await {
+    match user::get_seed(&claims.sub, env).await {
         Ok(response) => {
             if !response.seed.clone().unwrap_or_default().is_empty() {
                 let user_seed = response.seed.clone().unwrap();
@@ -236,9 +240,10 @@ pub struct BurnOutput {
 pub async fn burn(
     data: web::Data<AppState>,
     req: web::Json<BurnInput>,
-    claims: KeycloakClaims<user::ClaimsWithEmail>
+    claims: KeycloakClaims<user::ClaimsWithEmail>,
+    env: web::Data<Config>
 ) -> error::Result<HttpResponse> {
-    match user::get_seed(&claims.sub).await {
+    match user::get_seed(&claims.sub, env).await {
         Ok(response) => {
             if !response.seed.clone().unwrap_or_default().is_empty() {
                 let user_seed = response.seed.clone().unwrap();
@@ -376,10 +381,11 @@ pub struct TransferFromOutput {
 pub async fn transfer_from(
     data: web::Data<AppState>,
     req: web::Json<TransferFromInput>,
-    claims: KeycloakClaims<user::ClaimsWithEmail>
+    claims: KeycloakClaims<user::ClaimsWithEmail>,
+    env: web::Data<Config>
 ) -> error::Result<HttpResponse> {
 
-    match user::get_seed(&claims.sub).await {
+    match user::get_seed(&claims.sub, env).await {
         Ok(response) => {
             if !response.seed.clone().unwrap_or_default().is_empty() {
                 let user_seed = response.seed.clone().unwrap();

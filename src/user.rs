@@ -1,4 +1,5 @@
 use crate::account;
+use crate::config::Config;
 use serde::{Deserialize, Serialize};
 use actix_web::{
     web,
@@ -32,24 +33,26 @@ pub struct ErrorMessageOutput {
     message: String
 }
 
-pub async fn get_sugarfunge_token() -> Result<SugarTokenOutput, impl Responder> {
+pub async fn get_sugarfunge_token(env: web::Data<Config>) -> Result<SugarTokenOutput, impl Responder> {
+    let config = &env;
+    let endpoint = config.keycloak_host.to_string() + "/auth/realms/" + &config.keycloak_realm + "/protocol/openid-connect/token";
+
     let credentials = web::Data::new(Credentials{
-        client_id: "actix-web-middleware-keycloak-auth".to_string(),
+        client_id: config.keycloak_client_id.to_string(),
         grant_type: "password".to_string(),
-        username: "sugarfunge".to_owned(),
-        password: "sugarfunge432".to_owned(),
-        client_secret: "DzdlmZDSbdrJIfqrvNRDcBqFh9zYONzO".to_owned(),
+        username: config.keycloak_username.to_owned(),
+        password: config.keycloak_user_password.to_owned(),
+        client_secret: config.keycloak_client_secret.to_owned(),
         scope: "openid".to_string()
     });
 
     let awc_client = awc::Client::new();
 
-    let response = awc_client.post("http://0.0.0.0:8080/auth/realms/Sugarfunge/protocol/openid-connect/token")
+    let response = awc_client.post(endpoint)
         .insert_header((header::CONTENT_TYPE, "application/x-www-form-urlencoded"))
         .send_form(&credentials)
         .await; 
 
-        
     match response {
         Ok(mut response) => {
             match response.status() {
@@ -107,13 +110,15 @@ pub struct UserSeedOutput {
 
 pub async fn get_seed(
     user_id: &String,
+    env: web::Data<Config>
 ) -> Result<web::Json<UserSeedOutput>, web::Json<UserSeedOutput>> { 
+    let config = env.clone();
 
-    match get_sugarfunge_token().await {
+    match get_sugarfunge_token(env).await {
         Ok(response) => {
             // println!("{:?}", response.access_token);
             let awc_client = awc::Client::new();
-            let endpoint = format!("http://0.0.0.0:8080/auth/admin/realms/Sugarfunge/users/{}", user_id); 
+            let endpoint = format!("{}/auth/admin/realms/{}/users/{}", config.keycloak_host, config.keycloak_realm, user_id); 
 
             let user_response = awc_client.get(endpoint)
                 .append_header((header::ACCEPT, "application/json"), )
@@ -185,10 +190,12 @@ pub struct CreateAccountOutput {
 
 pub async fn insert_seed_user(
     user_id: &String,
-    req: HttpRequest
+    req: HttpRequest,
+    env: web::Data<Config>
 ) -> Result<web::Json<InsertUserSeedOutput>, web::Json<InsertUserSeedOutput>> { 
+    let config = env.clone();
 
-    match get_sugarfunge_token().await {
+    match get_sugarfunge_token(env).await {
         Ok(response) => {
             match account::create(req).await {
                 Ok(response_account) => {                    
@@ -199,7 +206,7 @@ pub async fn insert_seed_user(
                     // println!("CreateAccountOutput {:?}", body);
                     
                     let awc_client = awc::Client::new();
-                    let endpoint = format!("http://0.0.0.0:8080/auth/admin/realms/Sugarfunge/users/{}", user_id); 
+                    let endpoint = format!("{}/auth/admin/realms/{}/users/{}", config.keycloak_host, config.keycloak_realm, user_id); 
 
                     let attributes = json!({
                         "attributes": {
@@ -282,10 +289,11 @@ pub struct ClaimsWithEmail {
 
 pub async fn verify_seed(
     claims: KeycloakClaims<ClaimsWithEmail>,
-    req: HttpRequest
+    req: HttpRequest,
+    env: web::Data<Config>
 ) ->  impl Responder { 
 
-    match get_seed(&claims.sub).await {
+    match get_seed(&claims.sub, env.clone()).await {
         Ok(response) => {
             if !response.seed.clone().unwrap_or_default().is_empty() {
                 web::Json(
@@ -295,7 +303,7 @@ pub async fn verify_seed(
                     }
                 )
             } else {
-                match insert_seed_user(&claims.sub, req).await {
+                match insert_seed_user(&claims.sub, req, env).await {
                     Ok(response) => { response }
                     Err(error) => {error}
                 }

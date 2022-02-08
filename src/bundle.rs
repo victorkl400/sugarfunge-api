@@ -5,6 +5,7 @@ use crate::sugarfunge;
 use crate::sugarfunge::runtime_types::frame_support::storage::bounded_vec::BoundedVec;
 use crate::util::*;
 use crate::user;
+use crate::config::Config;
 use actix_web::{error, web, HttpResponse};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -38,9 +39,10 @@ pub struct RegisterBundleOutput {
 pub async fn register_bundle(
     data: web::Data<AppState>,
     req: web::Json<RegisterBundleInput>,
-    claims: KeycloakClaims<user::ClaimsWithEmail>
+    claims: KeycloakClaims<user::ClaimsWithEmail>,
+    env: web::Data<Config>
 ) -> error::Result<HttpResponse> {
-    match user::get_seed(&claims.sub).await {
+    match user::get_seed(&claims.sub, env).await {
         Ok(response) => {
             if !response.seed.clone().unwrap_or_default().is_empty() {
                 let user_seed = response.seed.clone().unwrap();
@@ -118,9 +120,10 @@ pub struct MintBundleOutput {
 pub async fn mint_bundle(
     data: web::Data<AppState>,
     req: web::Json<MintBundleInput>,
-    claims: KeycloakClaims<user::ClaimsWithEmail>
+    claims: KeycloakClaims<user::ClaimsWithEmail>,
+    env: web::Data<Config>
 ) -> error::Result<HttpResponse> {
-    match user::get_seed(&claims.sub).await {
+    match user::get_seed(&claims.sub, env).await {
         Ok(response) => {
             if !response.seed.clone().unwrap_or_default().is_empty() {
                 let user_seed = response.seed.clone().unwrap();
@@ -196,9 +199,10 @@ pub struct BurnBundleOutput {
 pub async fn burn_bundle(
     data: web::Data<AppState>,
     req: web::Json<BurnBundleInput>,
-    claims: KeycloakClaims<user::ClaimsWithEmail>
+    claims: KeycloakClaims<user::ClaimsWithEmail>,
+    env: web::Data<Config>
 ) -> error::Result<HttpResponse> {
-    match user::get_seed(&claims.sub).await {
+    match user::get_seed(&claims.sub, env).await {
         Ok(response) => {
             if !response.seed.clone().unwrap_or_default().is_empty() {
                 let user_seed = response.seed.clone().unwrap();

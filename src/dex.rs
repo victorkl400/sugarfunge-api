@@ -2,6 +2,7 @@ use crate::state::*;
 use crate::sugarfunge;
 use crate::util::*;
 use crate::user;
+use crate::config::Config;
 use actix_web::{error, web, HttpResponse};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -34,9 +35,10 @@ pub struct CreateDexOutput {
 pub async fn create(
     data: web::Data<AppState>,
     req: web::Json<CreateDexInput>,
-    claims: KeycloakClaims<user::ClaimsWithEmail>
+    claims: KeycloakClaims<user::ClaimsWithEmail>,
+    env: web::Data<Config>
 ) -> error::Result<HttpResponse> {
-    match user::get_seed(&claims.sub).await {
+    match user::get_seed(&claims.sub, env).await {
         Ok(response) => {
             if !response.seed.clone().unwrap_or_default().is_empty() {
                 let user_seed = response.seed.clone().unwrap();
@@ -108,9 +110,10 @@ pub struct BuyAssetsOutput {
 pub async fn buy_assets(
     data: web::Data<AppState>,
     req: web::Json<BuyAssetsInput>,
-    claims: KeycloakClaims<user::ClaimsWithEmail>
+    claims: KeycloakClaims<user::ClaimsWithEmail>,
+    env: web::Data<Config>
 ) -> error::Result<HttpResponse> {
-    match user::get_seed(&claims.sub).await {
+    match user::get_seed(&claims.sub, env).await {
         Ok(response) => {
             if !response.seed.clone().unwrap_or_default().is_empty() {
                 let user_seed = response.seed.clone().unwrap();
@@ -188,9 +191,10 @@ pub struct SellAssetsOutput {
 pub async fn sell_assets(
     data: web::Data<AppState>,
     req: web::Json<SellAssetsInput>,
-    claims: KeycloakClaims<user::ClaimsWithEmail>
+    claims: KeycloakClaims<user::ClaimsWithEmail>,
+    env: web::Data<Config>
 ) -> error::Result<HttpResponse> {
-    match user::get_seed(&claims.sub).await {
+    match user::get_seed(&claims.sub, env).await {
         Ok(response) => {
             if !response.seed.clone().unwrap_or_default().is_empty() {
                 let user_seed = response.seed.clone().unwrap();
@@ -268,9 +272,10 @@ pub struct AddLiquidityOutput {
 pub async fn add_liquidity(
     data: web::Data<AppState>,
     req: web::Json<AddLiquidityInput>,
-    claims: KeycloakClaims<user::ClaimsWithEmail>
+    claims: KeycloakClaims<user::ClaimsWithEmail>,
+    env: web::Data<Config>
 ) -> error::Result<HttpResponse> {
-    match user::get_seed(&claims.sub).await {
+    match user::get_seed(&claims.sub, env).await {
         Ok(response) => {
             if !response.seed.clone().unwrap_or_default().is_empty() {
                 let user_seed = response.seed.clone().unwrap();
@@ -349,9 +354,10 @@ pub struct RemoveLiquidityOutput {
 pub async fn remove_liquidity(
     data: web::Data<AppState>,
     req: web::Json<RemoveLiquidityInput>,
-    claims: KeycloakClaims<user::ClaimsWithEmail>
+    claims: KeycloakClaims<user::ClaimsWithEmail>,
+    env: web::Data<Config>
 ) -> error::Result<HttpResponse> {
-    match user::get_seed(&claims.sub).await {
+    match user::get_seed(&claims.sub, env).await {
         Ok(response) => {
             if !response.seed.clone().unwrap_or_default().is_empty() {
                 let user_seed = response.seed.clone().unwrap();

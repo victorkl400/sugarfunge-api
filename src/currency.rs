@@ -2,6 +2,7 @@ use crate::state::*;
 use crate::sugarfunge;
 use crate::util::*;
 use crate::user;
+use crate::config::Config;
 use actix_web::{error, web, HttpResponse};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -34,9 +35,10 @@ pub struct IssueCurrencyOutput {
 pub async fn issue(
     data: web::Data<AppState>,
     req: web::Json<IssueCurrencyInput>,
-    claims: KeycloakClaims<user::ClaimsWithEmail>
+    claims: KeycloakClaims<user::ClaimsWithEmail>,
+    env: web::Data<Config>
 ) -> error::Result<HttpResponse> {
-    match user::get_seed(&claims.sub).await {
+    match user::get_seed(&claims.sub, env).await {
         Ok(response) => {
             if !response.seed.clone().unwrap_or_default().is_empty() {
                 let user_seed = response.seed.clone().unwrap();
@@ -175,9 +177,10 @@ pub struct MintCurrencyOutput {
 pub async fn mint(
     data: web::Data<AppState>,
     req: web::Json<MintCurrencyInput>,
-    claims: KeycloakClaims<user::ClaimsWithEmail>
+    claims: KeycloakClaims<user::ClaimsWithEmail>,
+    env: web::Data<Config>
 ) -> error::Result<HttpResponse> {
-    match user::get_seed(&claims.sub).await {
+    match user::get_seed(&claims.sub, env).await {
         Ok(response) => {
             if !response.seed.clone().unwrap_or_default().is_empty() {
                 let user_seed = response.seed.clone().unwrap();
@@ -242,9 +245,10 @@ pub struct BurnCurrencyOutput {
 pub async fn burn(
     data: web::Data<AppState>,
     req: web::Json<BurnCurrencyInput>,
-    claims: KeycloakClaims<user::ClaimsWithEmail>
+    claims: KeycloakClaims<user::ClaimsWithEmail>,
+    env: web::Data<Config>
 ) -> error::Result<HttpResponse> {
-    match user::get_seed(&claims.sub).await {
+    match user::get_seed(&claims.sub, env).await {
         Ok(response) => {
             if !response.seed.clone().unwrap_or_default().is_empty() {
                 let user_seed = response.seed.clone().unwrap();

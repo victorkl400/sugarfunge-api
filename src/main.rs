@@ -13,8 +13,11 @@ use subxt::ClientBuilder;
 use actix_web_middleware_keycloak_auth::{
     AlwaysReturnPolicy, DecodingKey, KeycloakAuth,
 };
+use dotenv::dotenv;
+
 #[subxt::subxt(runtime_metadata_path = "sugarfunge_metadata.scale")]
 pub mod sugarfunge {}
+mod config;
 mod account;
 mod asset;
 mod bundle;
@@ -32,7 +35,11 @@ MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAgjxDaoGghFwAkdoo8YqoF4rVhZVmbkNTXrqD
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    dotenv().ok(); 
+    
     env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
+
+    let env = config::init();
 
     let opt = Opt::from_args();
 
@@ -70,6 +77,7 @@ async fn main() -> std::io::Result<()> {
             .wrap(middleware::Logger::default())
             .wrap(cors)
             .app_data(Data::new(state.clone()))
+            .app_data(Data::new(env.clone()))
             .wrap(keycloak_auth)
             .route("user/verify_seed", web::get().to(user::verify_seed))
             .route("account/create", web::post().to(account::create))

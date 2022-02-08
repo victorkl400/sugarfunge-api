@@ -2,6 +2,7 @@ use crate::state::*;
 use crate::sugarfunge;
 use crate::util::*;
 use crate::user;
+use crate::config::Config;
 use actix_web::{error, web, HttpRequest, http::StatusCode, HttpResponse};
 use rand::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -48,9 +49,10 @@ pub struct FundAccountOutput {
 pub async fn fund(
     data: web::Data<AppState>,
     req: web::Json<FundAccountInput>,
-    claims: KeycloakClaims<user::ClaimsWithEmail>
+    claims: KeycloakClaims<user::ClaimsWithEmail>,
+    env: web::Data<Config>
 ) -> error::Result<HttpResponse> {
-    match user::get_seed(&claims.sub).await {
+    match user::get_seed(&claims.sub, env).await {
         Ok(response) => {
             if !response.seed.clone().unwrap_or_default().is_empty() {
                 let user_seed = response.seed.clone().unwrap();

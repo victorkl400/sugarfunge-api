@@ -2,6 +2,7 @@ use crate::state::*;
 use crate::sugarfunge;
 use crate::util::*;
 use crate::user;
+use crate::config::Config;
 use actix_web::{error, web, HttpResponse};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -25,9 +26,10 @@ pub struct CreateEscrowOutput {
 pub async fn create_escrow(
     data: web::Data<AppState>,
     req: web::Json<CreateEscrowInput>,
-    claims: KeycloakClaims<user::ClaimsWithEmail>
+    claims: KeycloakClaims<user::ClaimsWithEmail>,
+    env: web::Data<Config>
 ) -> error::Result<HttpResponse> {
-    match user::get_seed(&claims.sub).await {
+    match user::get_seed(&claims.sub, env).await {
         Ok(response) => {
             if !response.seed.clone().unwrap_or_default().is_empty() {
                 let user_seed = response.seed.clone().unwrap();
@@ -90,9 +92,10 @@ pub struct RefundAssetsOutput {
 pub async fn refund_assets(
     data: web::Data<AppState>,
     req: web::Json<RefundAssetsInput>,
-    claims: KeycloakClaims<user::ClaimsWithEmail>
+    claims: KeycloakClaims<user::ClaimsWithEmail>,
+    env: web::Data<Config>
 ) -> error::Result<HttpResponse> {
-    match user::get_seed(&claims.sub).await {
+    match user::get_seed(&claims.sub, env).await {
         Ok(response) => {
             if !response.seed.clone().unwrap_or_default().is_empty() {
                 let user_seed = response.seed.clone().unwrap();
@@ -158,9 +161,10 @@ pub struct DepositAssetsOutput {
 pub async fn deposit_assets(
     data: web::Data<AppState>,
     req: web::Json<DepositAssetsInput>,
-    claims: KeycloakClaims<user::ClaimsWithEmail>
+    claims: KeycloakClaims<user::ClaimsWithEmail>,
+    env: web::Data<Config>
 ) -> error::Result<HttpResponse> {
-    match user::get_seed(&claims.sub).await {
+    match user::get_seed(&claims.sub, env).await {
         Ok(response) => {
             if !response.seed.clone().unwrap_or_default().is_empty() {
                 let user_seed = response.seed.clone().unwrap();

@@ -18,6 +18,7 @@ codec = { package = "parity-scale-codec", version = "2", default-features = fals
 derive_more = { version = "0.99.0", default-features = false }
 actix-web ="4.0.0-beta.21"
 awc = "3.0.0-beta.10"
+dotenv = "0.15.0"
 
 [dependencies.subxt]
 # path = "../subxt"
