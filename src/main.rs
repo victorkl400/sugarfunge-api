@@ -80,6 +80,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(Data::new(env.clone()))
             .wrap(keycloak_auth)
             .route("user/verify_seed", web::get().to(user::verify_seed))
+            .route("user/get_id", web::get().to(user::get_id))
             .route("account/create", web::post().to(account::create))
             .route("account/fund", web::post().to(account::fund))
             .route("account/balance", web::post().to(account::balance))

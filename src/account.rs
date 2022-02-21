@@ -152,9 +152,7 @@ pub async fn transfer(
 
                 match get_sugarfunge_token(env_aux).await {
                     Ok(response) => {
-
-                        //to do: remove current seed from the user
-
+                        
                         let awc_client = awc::Client::new();
                         let endpoint = format!("{}/auth/admin/realms/{}/users/{}", config.keycloak_host, config.keycloak_realm, &claims.sub); 
 
@@ -172,12 +170,48 @@ pub async fn transfer(
                         match user_response {
                             Ok(user_response) => {
                                 if let StatusCode::NO_CONTENT = user_response.status() {
-                                    Ok(HttpResponse::Ok().json(
-                                        TransferAccountOutput {
-                                            error: None,
-                                            message: "Attribute insert to user attributes".to_string()
+                                    
+                                    let awc_client = awc::Client::new();
+                                    let endpoint = format!("{}/auth/admin/realms/{}/users/{}", config.keycloak_host, config.keycloak_realm, req.to); 
+
+                                    let attributes = json!({
+                                        "attributes": {
+                                            "user-seed": [
+                                                user_seed
+                                            ]
                                         }
-                                    ))
+                                    });
+                        
+                                    let receiver_response = awc_client.put(endpoint)
+                                        .append_header((header::ACCEPT, "application/json"), )
+                                        .append_header((header::CONTENT_TYPE, "application/json"))
+                                        .append_header((header::AUTHORIZATION, "Bearer ".to_string() + &response.access_token))
+                                        .send_json(&attributes)
+                                        .await;
+
+                                    match receiver_response {
+                                        Ok(receiver_response) => {
+                                            if let StatusCode::NO_CONTENT = receiver_response.status() {
+                                                Ok(HttpResponse::Ok().json(
+                                                    TransferAccountOutput {
+                                                        error: None,
+                                                        message: "Attribute insert to user attributes".to_string()
+                                                    }
+                                                ))
+                                            } 
+                                            else {
+                                                Ok(HttpResponse::BadRequest().json(RequestError {
+                                                    message: json!("Failed to find user::getAttributes"),
+                                                }))
+                                            }
+                                        }
+                                        Err(_e) => {
+                                            Ok(HttpResponse::BadRequest().json(RequestError {
+                                                    message: json!("Failed to find user::getAttributes"),
+                                                }))
+                                            }                                        
+                                    }    
+                                                                       
                                 } else {
                                     Ok(HttpResponse::BadRequest().json(RequestError {
                                         message: json!("Failed to find user::getAttributes"),

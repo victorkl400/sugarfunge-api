@@ -319,3 +319,28 @@ pub async fn verify_seed(
         }
     }
 }
+
+#[derive(Serialize, Deserialize)]
+pub struct GetIdOutput {
+    user_id: String
+}
+
+pub async fn get_id(
+    claims: KeycloakClaims<ClaimsWithEmail>
+) ->  impl Responder {
+    if !claims.sub.is_empty(){
+        let user_id = claims.sub.clone();
+        web::Json(
+            GetIdOutput {
+                user_id
+            }
+        )
+    }
+    else {
+        web::Json(
+            GetIdOutput {
+                user_id: "No user ID found".to_string()
+            }
+        )
+    }
+}
